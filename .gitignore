@@ -1,3 +1,11 @@
+.idea/
+calendar/
+json/
+movie/
+teaser/
+fetch.ini
+testing.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
