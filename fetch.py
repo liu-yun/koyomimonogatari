@@ -90,7 +90,7 @@ def amz_request(s, function, context, access, secret, token, payload):
         'X-Amz-Date': amz_date,
         'X-Amz-Target': target,
         'X-Amz-Client-Context': context,
-        'X-Amz-Invocation-Type': 'RequestResponse',
+        'X-Amz-Invocation-Type': invocation_type,
         'X-Amz-Log-Type': 'None',
         'x-amz-security-token': token,
         'Authorization': auth_header,
