@@ -26,9 +26,12 @@ def encrypt(raw):
 
 
 def main():
-    with open('cache.dat', 'rb') as f:
-        cache = f.read()
-    decrypt(cache)
+    try:
+        with open('cache.dat', 'rb') as f:
+            cache = f.read()
+        decrypt(cache)
+    except:
+        print('Cannot open cache.dat')
 
     start_date = date(2016, 1, 1)
     delta = date.today() - start_date

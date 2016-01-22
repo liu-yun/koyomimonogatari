@@ -10,6 +10,7 @@ verify_ssl = True
 
 
 def get_keys(user):
+    print('Requesting keys...', end="")
     cognito_url = 'https://cognito-identity.ap-northeast-1.amazonaws.com/'
     cognito_payload = {
         'IdentityId': 'ap-northeast-1:' + user,
@@ -24,11 +25,13 @@ def get_keys(user):
     }
     try:
         r = requests.post(cognito_url, data=json.dumps(cognito_payload), headers=cognito_headers, verify=verify_ssl)
+        if r.status_code == 200:
+            keys = r.json()
+            print('\tOK')
+            return keys['Credentials']['AccessKeyId'], keys['Credentials']['SecretKey'], keys['Credentials']['SessionToken']
     except:
-        print('Failed to get key.')
-        return -1
-    keys = r.json()
-    return keys['Credentials']['AccessKeyId'], keys['Credentials']['SecretKey'], keys['Credentials']['SessionToken']
+        print('\nFailed to get keys')
+        sys.exit(-1)
 
 
 def sign(key, msg):
