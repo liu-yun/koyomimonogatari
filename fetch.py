@@ -5,7 +5,6 @@ import json
 from datetime import timedelta, datetime
 from hashlib import sha256
 import hmac
-
 import requests
 
 verify_ssl = True
