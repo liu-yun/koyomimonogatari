@@ -114,21 +114,11 @@ def transform_uri(uri):
     return uri.lstrip('/').replace('/', '\\')
 
 
-def cf_get(s, policy, signature, key_pair, uri):
+def cf_get(s, uri):
     cf_url = "https://d3249smwmt8hpy.cloudfront.net" + uri
-    cf_cookies = {
-        'CloudFront-Policy': policy,
-        'CloudFront-Signature': signature,
-        'CloudFront-Key-Pair-Id': key_pair
-    }
-    cf_headers = {
-        'User-Agent': 'stagefright/1.2 (Linux;Android 6.0.1)',
-        'Connection': 'Keep-Alive',
-        'Accept-Encoding': 'gzip',
-    }
     try:
         print('Requesting ' + uri, end="")
-        d = s.get(cf_url, headers=cf_headers, cookies=cf_cookies, verify=verify_ssl)
+        d = s.get(cf_url, verify=verify_ssl)
         file_path = transform_uri(uri)
         if d.status_code == 200:
             if os.path.exists(os.path.dirname(file_path)) is False:
@@ -141,13 +131,13 @@ def cf_get(s, policy, signature, key_pair, uri):
             print('\n403 Forbidden.')
             raise requests.HTTPError()
         if os.path.split(file_path)[1] == 'android.m3u8':
-            cf_get(s, policy, signature, key_pair, os.path.dirname(uri) + '/600kbps/movie_.m3u8')
+            cf_get(s, os.path.dirname(uri) + '/600kbps/movie_.m3u8')
         if os.path.split(file_path)[1] == 'movie_.m3u8':
             last = int(d.text.splitlines()[-2].rstrip('.ts').lstrip('movie_'))
             video_list = [os.path.dirname(uri) + '/movie_' + str(i).zfill(5) + '.ts' for i in range(last + 1)]
             video_list.append(os.path.dirname(uri) + '/vdata')
             for video in video_list:
-                cf_get(s, policy, signature, key_pair, video)
+                cf_get(s, video)
     except requests.HTTPError:
         print('Failed to get ' + uri)
         sys.exit(-1)
@@ -229,11 +219,11 @@ def main():
             uri_list.append(movie['movie_url'].split('net')[1])
             uri_list.append(movie['image_url'])
             movie_modified = True
-            last_movie_fetched = movie['id']
+            last_movie_fetched = str(movie['id'])
     if movie_modified is True:
         with open('json\\movie.json', 'w+', encoding='utf-8') as f:
             f.write(r.text)
-        config.set('fetch', 'last_movie_fetched', str(last_movie_fetched))
+        config.set('fetch', 'last_movie_fetched', last_movie_fetched)
 
     if date_news_updated > date_last_news_updated:
         r = amz_request(s, 'news', context, access, secret, token, amz_payload)
@@ -259,8 +249,19 @@ def main():
         with open('json\\calendar\\' + filename + '.json', 'w+', encoding='utf-8') as f:
             f.write(json.dumps(day, ensure_ascii=False))
 
-    for uri in unique(uri_list):
-        cf_get(s, cf_policy, cf_signature, cf_key_pair, uri)
+    with requests.Session() as s:
+        s.headers.update({
+            'User-Agent': 'stagefright/1.2 (Linux;Android 6.0.1)',
+            'Connection': 'Keep-Alive',
+            'Accept-Encoding': 'gzip',
+        })
+        s.cookies.update({
+            'CloudFront-Policy': cf_policy,
+            'CloudFront-Signature': cf_signature,
+            'CloudFront-Key-Pair-Id': cf_key_pair
+        })
+        for uri in unique(uri_list):
+            cf_get(s, uri)
     config.set('fetch', 'last_modified', today)
     with open('fetch.ini', 'w+') as file:
         config.write(file)
