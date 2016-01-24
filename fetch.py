@@ -29,7 +29,8 @@ def get_keys(user):
         if r.status_code == 200:
             keys = r.json()
             print('\tOK')
-            return keys['Credentials']['AccessKeyId'], keys['Credentials']['SecretKey'], keys['Credentials']['SessionToken']
+            return keys['Credentials']['AccessKeyId'], keys['Credentials']['SecretKey'], keys['Credentials'][
+                'SessionToken']
     except:
         print('\nFailed to get keys')
         sys.exit(-1)
@@ -113,7 +114,7 @@ def transform_uri(uri):
     return uri.lstrip('/').replace('/', '\\')
 
 
-def cf_get(policy, signature, key_pair, uri):
+def cf_get(s, policy, signature, key_pair, uri):
     cf_url = "https://d3249smwmt8hpy.cloudfront.net" + uri
     cf_cookies = {
         'CloudFront-Policy': policy,
@@ -127,9 +128,9 @@ def cf_get(policy, signature, key_pair, uri):
     }
     try:
         print('Requesting ' + uri, end="")
-        d = requests.get(cf_url, headers=cf_headers, cookies=cf_cookies, verify=verify_ssl)
+        d = s.get(cf_url, headers=cf_headers, cookies=cf_cookies, verify=verify_ssl)
+        file_path = transform_uri(uri)
         if d.status_code == 200:
-            file_path = transform_uri(uri)
             if os.path.exists(os.path.dirname(file_path)) is False:
                 os.makedirs(os.path.dirname(file_path))
             with open(file_path, 'wb+') as f:
@@ -139,6 +140,14 @@ def cf_get(policy, signature, key_pair, uri):
         if d.status_code == 403:
             print('\n403 Forbidden.')
             raise requests.HTTPError()
+        if os.path.split(file_path)[1] == 'android.m3u8':
+            cf_get(s, policy, signature, key_pair, os.path.dirname(uri) + '/600kbps/movie_.m3u8')
+        if os.path.split(file_path)[1] == 'movie_.m3u8':
+            last = int(d.text.splitlines()[-2].rstrip('.ts').lstrip('movie_'))
+            video_list = [os.path.dirname(uri) + '/movie_' + str(i).zfill(5) + '.ts' for i in range(last + 1)]
+            video_list.append(os.path.dirname(uri) + '/vdata')
+            for video in video_list:
+                cf_get(s, policy, signature, key_pair, video)
     except requests.HTTPError:
         print('Failed to get ' + uri)
         sys.exit(-1)
@@ -161,13 +170,17 @@ def main():
         context = f.read()
     config = configparser.ConfigParser()
     if os.path.exists('fetch.ini') is False:
-        config['fetch'] = {'last_modified': '2015/12/31', 'last_news_updated': '2015/12/31', 'teaser_fetched': False}
+        config['fetch'] = {'last_modified': '2015/12/31',
+                           'last_news_updated': '2015/12/31',
+                           'last_movie_updated': '0',
+                           'teaser_fetched': False}
         # TODO Generate a new user_id
         with open('fetch.ini', 'w') as file:
             config.write(file)
     config.read("fetch.ini")
     date_last_modified = datetime.strptime(config['fetch']['last_modified'], "%Y/%m/%d").date()
     date_last_news_updated = datetime.strptime(config['fetch']['last_news_updated'], "%Y/%m/%d").date()
+    last_movie_fetched = config['fetch']['last_movie_fetched']
     teaser_fetched = config['fetch'].getboolean('teaser_fetched')
     user_id = config['fetch']['user_id']
 
@@ -209,9 +222,18 @@ def main():
     cf_key_pair = dic['k']
 
     r = amz_request(s, 'movie', context, access, secret, token, amz_payload)
-    # TODO Download movies
-    with open('json\\movie.json', 'w+', encoding='utf-8') as f:
-        f.write(r.text)
+    dic = r.json()
+    movie_modified = False
+    for movie in dic['movies']:
+        if int(movie['id']) > int(last_movie_fetched):
+            uri_list.append(movie['movie_url'].split('net')[1])
+            uri_list.append(movie['image_url'])
+            movie_modified = True
+            last_movie_fetched = movie['id']
+    if movie_modified is True:
+        with open('json\\movie.json', 'w+', encoding='utf-8') as f:
+            f.write(r.text)
+        config.set('fetch', 'last_movie_fetched', str(last_movie_fetched))
 
     if date_news_updated > date_last_news_updated:
         r = amz_request(s, 'news', context, access, secret, token, amz_payload)
@@ -238,7 +260,7 @@ def main():
             f.write(json.dumps(day, ensure_ascii=False))
 
     for uri in unique(uri_list):
-        cf_get(cf_policy, cf_signature, cf_key_pair, uri)
+        cf_get(s, cf_policy, cf_signature, cf_key_pair, uri)
     config.set('fetch', 'last_modified', today)
     with open('fetch.ini', 'w+') as file:
         config.write(file)
