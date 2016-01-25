@@ -10,8 +10,33 @@ import requests
 verify_ssl = True
 
 
-def get_keys(user):
-    print('Requesting keys...', end="")
+def get_id():
+    print('Requesting ID...', end="")
+    cognito_url = 'https://cognito-identity.ap-northeast-1.amazonaws.com/'
+    cognito_payload = {
+        'IdentityPoolId': 'ap-northeast-1:fd52b510-f304-45fc-8838-c9e348c4a643',
+        'Logins': {}
+    }
+    cognito_headers = {
+        'User-Agent': 'aws-sdk-android/2.2.8 Linux/3.10.73 Dalvik/2.1.0/0 zh_CN',
+        'Connection': 'Keep-Alive',
+        'Accept-Encoding': 'gzip',
+        'Content-Type': 'application/x-amz-json-1.0',
+        'X-Amz-Target': 'AWSCognitoIdentityService.GetId'
+    }
+    try:
+        r = requests.post(cognito_url, data=json.dumps(cognito_payload), headers=cognito_headers, verify=verify_ssl)
+        if r.status_code == 200:
+            dic = r.json()
+            print('\tOK')
+            return dic['IdentityId'].lstrip('ap-northeast-1:')
+    except:
+        print('\nFailed to get ID')
+        sys.exit(-1)
+
+
+def get_credentials(user):
+    print('Requesting credentials...', end="")
     cognito_url = 'https://cognito-identity.ap-northeast-1.amazonaws.com/'
     cognito_payload = {
         'IdentityId': 'ap-northeast-1:' + user,
@@ -32,7 +57,7 @@ def get_keys(user):
             return keys['Credentials']['AccessKeyId'], keys['Credentials']['SecretKey'], keys['Credentials'][
                 'SessionToken']
     except:
-        print('\nFailed to get keys')
+        print('\nFailed to get credentials')
         sys.exit(-1)
 
 
@@ -160,11 +185,12 @@ def main():
         context = f.read()
     config = configparser.ConfigParser()
     if os.path.exists('fetch.ini') is False:
+        user_id = get_id()
         config['fetch'] = {'last_modified': '2015/12/31',
                            'last_news_updated': '2015/12/31',
                            'last_movie_updated': '0',
-                           'teaser_fetched': False}
-        # TODO Generate a new user_id
+                           'teaser_fetched': False,
+                           'user_id': user_id}
         with open('fetch.ini', 'w') as file:
             config.write(file)
     config.read("fetch.ini")
@@ -174,7 +200,7 @@ def main():
     teaser_fetched = config['fetch'].getboolean('teaser_fetched')
     user_id = config['fetch']['user_id']
 
-    access, secret, token = get_keys(user_id)
+    access, secret, token = get_credentials(user_id)
     if access is None or secret is None:
         print('No key is available.')
         sys.exit(-1)
@@ -229,7 +255,7 @@ def main():
         r = amz_request(s, 'news', context, access, secret, token, amz_payload)
         with open('json\\news.json', 'w+', encoding='utf-8') as f:
             f.write(r.text)
-        config.set('fetch', 'news_updated_at', news_updated)
+        config.set('fetch', 'last_news_updated', news_updated)
 
     start_date = date_last_modified + timedelta(days=1)
     delta = date_today - start_date
