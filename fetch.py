@@ -156,7 +156,7 @@ def cf_get(s, uri):
             print('\n403 Forbidden.')
             raise requests.HTTPError()
         if os.path.split(file_path)[1] == 'android.m3u8':
-            cf_get(s, os.path.dirname(uri) + '/600kbps/movie_.m3u8')
+            cf_get(s, os.path.dirname(uri) + '/' + d.text.splitlines()[2])
         if os.path.split(file_path)[1] == 'movie_.m3u8':
             last = int(d.text.splitlines()[-2].rstrip('.ts').lstrip('movie_'))
             video_list = [os.path.dirname(uri) + '/movie_' + str(i).zfill(5) + '.ts' for i in range(last + 1)]
