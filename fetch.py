@@ -104,7 +104,7 @@ def amz_request(s, function, context, access, secret, token, payload):
     algorithm = 'AWS4-HMAC-SHA256'
     credential_scope = '/'.join([date_stamp, region, service, 'aws4_request'])
     string_to_sign = '\n'.join(
-            [algorithm, amz_date, credential_scope, sha256(canonical_request).hexdigest()]).encode('utf-8')
+        [algorithm, amz_date, credential_scope, sha256(canonical_request).hexdigest()]).encode('utf-8')
     signing_key = get_signature_key(secret, date_stamp, region, service)
     signature = hmac.new(signing_key, string_to_sign, sha256).hexdigest()
     auth_header = (algorithm + ' ' + 'Credential=' + access + '/' + credential_scope + ', ' +
@@ -176,7 +176,7 @@ def unique(seq):
 
 def main():
     print('Koyomimonogatari Fetch')
-    folders = ['teaser', 'movie', 'calendar', 'json']
+    folders = ['teaser', 'movie', 'calendar', 'monthlygift', 'json\\calendar', 'json\\monthlygift']
     for folder in folders:
         if os.path.exists(folder) is False:
             os.makedirs(folder)
@@ -216,6 +216,7 @@ def main():
         'scale': 1
     }
     uri_list = []
+
     r = amz_request(s, 'config', context, access, secret, token, amz_payload)
     dic = r.json()
     today = dic['today']
@@ -263,7 +264,7 @@ def main():
     amz_payload['days'] = days
     r = amz_request(s, 'dailycalendar', context, access, secret, token, amz_payload)
     dic = r.json()
-
+    del amz_payload['days']
     for day in dic['days']:
         filename = day['month'].zfill(2) + day['date'].zfill(2)
         uri_list.append(day['image_url'])
@@ -274,6 +275,14 @@ def main():
             uri_list.append(rewards['image_url'])
         with open('json\\calendar\\' + filename + '.json', 'w+', encoding='utf-8') as f:
             f.write(json.dumps(day, ensure_ascii=False))
+        if day['date'] == '31':
+            amz_payload['date'] = day['key'][:7]
+            r = amz_request(s, 'monthlygift', context, access, secret, token, amz_payload)
+            dic = r.json()
+            uri_list.append(dic['thumbnail_url'])
+            uri_list.append(dic['image_url'])
+            with open('json\\monthlygift\\' + dic['date'][5:] + '.json', 'w+', encoding='utf-8')as f:
+                f.write(r.text)
 
     with requests.Session() as s:
         s.headers.update({
