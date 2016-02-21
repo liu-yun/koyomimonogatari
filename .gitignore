@@ -1,8 +1,12 @@
 .idea/
 calendar/
+data/
 json/
+monthlygift/
 movie/
 teaser/
+cache.dat
+calendar.csv
 fetch.ini
 testing.py
 
