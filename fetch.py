@@ -227,6 +227,7 @@ def main():
         print('Already up-to-date.')
         sys.exit()
     if teaser_fetched is False:
+        uri_list.append(dic['teaser_calendar_image_url'])
         uri_list.append(dic['teaser_image_url'])
         uri_list.append(dic['teaser_voice_url'])
     with open('json\\config.json', 'w+', encoding='utf-8') as f:
