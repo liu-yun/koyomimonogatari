@@ -2,6 +2,7 @@ import os
 import sys
 import configparser
 import json
+import calendar
 from datetime import timedelta, datetime
 from hashlib import sha256
 import hmac
@@ -276,7 +277,7 @@ def main():
             uri_list.append(rewards['image_url'])
         with open('json\\calendar\\' + filename + '.json', 'w+', encoding='utf-8') as f:
             f.write(json.dumps(day, ensure_ascii=False))
-        if day['date'] == '31':
+        if day['date'] == str(calendar.monthrange(date_today.year, date_today.month)[1]):
             amz_payload['date'] = day['key'][:7]
             r = amz_request(s, 'monthlygift', context, access, secret, token, amz_payload)
             dic = r.json()
