@@ -125,7 +125,7 @@ def amz_request(s, function, context, access, secret, token, payload):
         'Authorization': auth_header,
     }
     try:
-        print('Requesting ' + function + '...', end="")
+        print('Requesting ' + function + '...', end="", flush=True)
         r = s.post(endpoint + canonical_uri, data=parameters, headers=amz_headers, verify=verify_ssl)
         if r.status_code == 200:
             print('\tOK')
@@ -143,9 +143,11 @@ def transform_uri(uri):
 def cf_get(s, uri):
     cf_url = "https://d3249smwmt8hpy.cloudfront.net" + uri
     try:
-        print('Requesting ' + uri, end="")
-        d = s.get(cf_url, verify=verify_ssl)
         file_path = transform_uri(uri)
+        if os.path.isfile(file_path) is True:
+            return
+        print('Requesting ' + uri, end="", flush=True)
+        d = s.get(cf_url, verify=verify_ssl)
         if d.status_code == 200:
             if os.path.exists(os.path.dirname(file_path)) is False:
                 os.makedirs(os.path.dirname(file_path))
@@ -277,7 +279,7 @@ def main():
             uri_list.append(rewards['image_url'])
         with open('json\\calendar\\' + filename + '.json', 'w+', encoding='utf-8') as f:
             f.write(json.dumps(day, ensure_ascii=False))
-        if day['date'] == str(calendar.monthrange(date_today.year, date_today.month)[1]):
+        if day['date'] == str(calendar.monthrange(int(day['year']), int(day['month']))[1]):
             amz_payload['date'] = day['key'][:7]
             r = amz_request(s, 'monthlygift', context, access, secret, token, amz_payload)
             dic = r.json()
