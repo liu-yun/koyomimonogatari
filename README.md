@@ -16,11 +16,3 @@ Run `fetch.py`, and it will download the resources automatically.
 ```
 
 `decoder.py` decodes the obfuscated strings in the Java source code.
-
-WARNING
----
-If you meet `403 Forbidden`, please retry with an IP in Japan.
-
-License
----
-GPLv3
