@@ -26,11 +26,10 @@ def get_id():
         'X-Amz-Target': 'AWSCognitoIdentityService.GetId'
     }
     try:
-        r = requests.post(cognito_url, data=json.dumps(cognito_payload), headers=cognito_headers, verify=verify_ssl)
+        r = requests.post(cognito_url, json=cognito_payload, headers=cognito_headers, verify=verify_ssl)
         if r.status_code == 200:
-            dic = r.json()
             print('\tOK')
-            return dic['IdentityId'].lstrip('ap-northeast-1:')
+            return r.json()['IdentityId'].lstrip('ap-northeast-1:')
     except:
         print('\nFailed to get ID')
         sys.exit(-1)
@@ -51,7 +50,7 @@ def get_credentials(user):
         'X-Amz-Target': 'AWSCognitoIdentityService.GetCredentialsForIdentity'
     }
     try:
-        r = requests.post(cognito_url, data=json.dumps(cognito_payload), headers=cognito_headers, verify=verify_ssl)
+        r = requests.post(cognito_url, json=cognito_payload, headers=cognito_headers, verify=verify_ssl)
         if r.status_code == 200:
             keys = r.json()
             print('\tOK')
@@ -74,79 +73,82 @@ def get_signature_key(key, date_stamp, region_name, service_name):
     return signing
 
 
-def amz_request(s, function, context, access, secret, token, payload):
-    method = 'POST'
-    service = 'lambda'
-    host = 'lambda.ap-northeast-1.amazonaws.com'
-    region = 'ap-northeast-1'
-    endpoint = 'https://lambda.ap-northeast-1.amazonaws.com'
-    content_type = 'binary/octet-stream'
-    target = 'AWSLambda.Invoke'
-    invocation_type = 'RequestResponse'
-    canonical_uri = '/2015-03-31/functions/koyomimonogatari_app_' + function + '_get/invocations'
-    parameters = json.dumps(payload).encode('utf-8')
+def get_amz_request():
+    def amz_request_wrapper(session, function, payload):
+        method = 'POST'
+        service = 'lambda'
+        host = 'lambda.ap-northeast-1.amazonaws.com'
+        region = 'ap-northeast-1'
+        endpoint = 'https://lambda.ap-northeast-1.amazonaws.com'
+        content_type = 'binary/octet-stream'
+        target = 'AWSLambda.Invoke'
+        invocation_type = 'RequestResponse'
+        canonical_uri = '/2015-03-31/functions/koyomimonogatari_app_' + function + '_get/invocations'
+        parameters = json.dumps(payload).encode('utf-8')
 
-    t = datetime.utcnow()
-    amz_date = t.strftime('%Y%m%dT%H%M%SZ')
-    date_stamp = t.strftime('%Y%m%d')
-    canonical_querystring = ''
-    canonical_headers = '\n'.join(['host:' + host,
-                                   'x-amz-client-context:' + context,
-                                   'x-amz-date:' + amz_date,
-                                   'x-amz-invocation-type:' + invocation_type,
-                                   'x-amz-log-type:' + 'None',
-                                   'x-amz-security-token:' + token,
-                                   'x-amz-target:' + target + '\n'])
-    signed_headers = ('host;x-amz-client-context;x-amz-date;x-amz-invocation-type;'
-                      'x-amz-log-type;x-amz-security-token;x-amz-target')
-    payload_hash = sha256(parameters).hexdigest()
-    canonical_request = '\n'.join([method, canonical_uri, canonical_querystring,
-                                   canonical_headers, signed_headers, payload_hash]).encode('utf-8')
-    algorithm = 'AWS4-HMAC-SHA256'
-    credential_scope = '/'.join([date_stamp, region, service, 'aws4_request'])
-    string_to_sign = '\n'.join(
-        [algorithm, amz_date, credential_scope, sha256(canonical_request).hexdigest()]).encode('utf-8')
-    signing_key = get_signature_key(secret, date_stamp, region, service)
-    signature = hmac.new(signing_key, string_to_sign, sha256).hexdigest()
-    auth_header = (algorithm + ' ' + 'Credential=' + access + '/' + credential_scope + ', ' +
-                   'SignedHeaders=' + signed_headers + ', ' + 'Signature=' + signature)
+        t = datetime.utcnow()
+        amz_date = t.strftime('%Y%m%dT%H%M%SZ')
+        date_stamp = t.strftime('%Y%m%d')
+        canonical_querystring = ''
+        canonical_headers = '\n'.join(['host:' + host,
+                                       'x-amz-client-context:' + context,
+                                       'x-amz-date:' + amz_date,
+                                       'x-amz-invocation-type:' + invocation_type,
+                                       'x-amz-log-type:' + 'None',
+                                       'x-amz-security-token:' + token,
+                                       'x-amz-target:' + target + '\n'])
+        signed_headers = ('host;x-amz-client-context;x-amz-date;x-amz-invocation-type;'
+                          'x-amz-log-type;x-amz-security-token;x-amz-target')
+        payload_hash = sha256(parameters).hexdigest()
+        canonical_request = '\n'.join([method, canonical_uri, canonical_querystring,
+                                       canonical_headers, signed_headers, payload_hash]).encode('utf-8')
+        algorithm = 'AWS4-HMAC-SHA256'
+        credential_scope = '/'.join([date_stamp, region, service, 'aws4_request'])
+        string_to_sign = '\n'.join(
+            [algorithm, amz_date, credential_scope, sha256(canonical_request).hexdigest()]).encode('utf-8')
+        signing_key = get_signature_key(secret, date_stamp, region, service)
+        signature = hmac.new(signing_key, string_to_sign, sha256).hexdigest()
+        auth_header = (algorithm + ' ' + 'Credential=' + access + '/' + credential_scope + ', ' +
+                       'SignedHeaders=' + signed_headers + ', ' + 'Signature=' + signature)
 
-    amz_headers = {
-        'User-Agent': 'aws-sdk-android/2.2.8 Linux/3.10.73 Dalvik/2.1.0/0 zh_CN',
-        'Connection': 'Keep-Alive',
-        'Content-Type': content_type,
-        'Accept-Encoding': 'gzip',
-        'X-Amz-Date': amz_date,
-        'X-Amz-Target': target,
-        'X-Amz-Client-Context': context,
-        'X-Amz-Invocation-Type': invocation_type,
-        'X-Amz-Log-Type': 'None',
-        'x-amz-security-token': token,
-        'Authorization': auth_header,
-    }
+        amz_headers = {
+            'User-Agent': 'aws-sdk-android/2.2.8 Linux/3.10.73 Dalvik/2.1.0/0 zh_CN',
+            'Connection': 'Keep-Alive',
+            'Content-Type': content_type,
+            'Accept-Encoding': 'gzip',
+            'X-Amz-Date': amz_date,
+            'X-Amz-Target': target,
+            'X-Amz-Client-Context': context,
+            'X-Amz-Invocation-Type': invocation_type,
+            'X-Amz-Log-Type': 'None',
+            'x-amz-security-token': token,
+            'Authorization': auth_header,
+        }
+        try:
+            print('Requesting ' + function + '...', end="", flush=True)
+            r = session.post(endpoint + canonical_uri, data=parameters, headers=amz_headers, verify=verify_ssl)
+            if r.status_code == 200:
+                print('\tOK')
+                return r
+            else:
+                print('Response code:' % r.status_code)
+        except:
+            sys.exit(-1)
+
+    return amz_request_wrapper
+
+
+def transform_url(url):
+    return url.lstrip('/').replace('/', '\\')
+
+
+def cf_get(s, url):
+    cf_url = "https://d3249smwmt8hpy.cloudfront.net" + url
     try:
-        print('Requesting ' + function + '...', end="", flush=True)
-        r = s.post(endpoint + canonical_uri, data=parameters, headers=amz_headers, verify=verify_ssl)
-        if r.status_code == 200:
-            print('\tOK')
-            return r
-        else:
-            print('Response code:' % r.status_code)
-    except:
-        sys.exit(-1)
-
-
-def transform_uri(uri):
-    return uri.lstrip('/').replace('/', '\\')
-
-
-def cf_get(s, uri):
-    cf_url = "https://d3249smwmt8hpy.cloudfront.net" + uri
-    try:
-        file_path = transform_uri(uri)
+        file_path = transform_url(url)
         if os.path.isfile(file_path) is True:
             return
-        print('Requesting ' + uri, end="", flush=True)
+        print('Requesting ' + url, end="", flush=True)
         d = s.get(cf_url, verify=verify_ssl)
         if d.status_code == 200:
             if os.path.exists(os.path.dirname(file_path)) is False:
@@ -159,15 +161,15 @@ def cf_get(s, uri):
             print('\n403 Forbidden.')
             raise requests.HTTPError()
         if os.path.split(file_path)[1] == 'android.m3u8':
-            cf_get(s, os.path.dirname(uri) + '/' + d.text.splitlines()[2])
+            cf_get(s, os.path.dirname(url) + '/' + d.text.splitlines()[2])
         if os.path.split(file_path)[1] == 'movie_.m3u8':
             last = int(d.text.splitlines()[-2].rstrip('.ts').lstrip('movie_'))
-            video_list = [os.path.dirname(uri) + '/movie_' + str(i).zfill(5) + '.ts' for i in range(last + 1)]
-            video_list.append(os.path.dirname(uri) + '/vdata')
+            video_list = [os.path.dirname(url) + '/movie_' + str(i).zfill(5) + '.ts' for i in range(last + 1)]
+            video_list.append(os.path.dirname(url) + '/vdata')
             for video in video_list:
                 cf_get(s, video)
     except requests.HTTPError:
-        print('Failed to get ' + uri)
+        print('Failed to get ' + url)
         sys.exit(-1)
 
 
@@ -177,7 +179,7 @@ def unique(seq):
     return [x for x in seq if not (x in seen or seen_add(x))]
 
 
-def main():
+if __name__ == '__main__':
     print('Koyomimonogatari Fetch')
     folders = ['teaser', 'movie', 'calendar', 'monthlygift', 'json\\calendar', 'json\\monthlygift']
     for folder in folders:
@@ -207,48 +209,47 @@ def main():
     if access is None or secret is None:
         print('No key is available.')
         sys.exit(-1)
+    amz_request = get_amz_request()
 
     s = requests.Session()
     amz_payload = {
         'os': 'android',
-        'version': '1.0.3',
-        'build_no': '5',
+        'version': '1.0.5',
+        'build_no': '19',
         'user_id': user_id,
         'width': 1920,
         'height': 1080,
         'scale': 1
     }
-    uri_list = []
+    url_list = []
 
-    r = amz_request(s, 'config', context, access, secret, token, amz_payload)
+    r = amz_request(s, 'config', amz_payload)
     dic = r.json()
-    today = dic['today']
-    news_updated = dic['news_updated_at']
-    date_today = datetime.strptime(today, "%Y/%m/%d").date()
-    date_news_updated = datetime.strptime(news_updated, "%Y/%m/%d").date()
+    str_today = dic['today']
+    str_news_updated = dic['news_updated_at']
+    date_today = datetime.strptime(str_today, "%Y/%m/%d").date()
+    date_news_updated = datetime.strptime(str_news_updated, "%Y/%m/%d").date()
     if date_today <= date_last_modified:
         print('Already up-to-date.')
         sys.exit()
     if teaser_fetched is False:
-        uri_list.append(dic['teaser_calendar_image_url'])
-        uri_list.append(dic['teaser_image_url'])
-        uri_list.append(dic['teaser_voice_url'])
+        url_list.append(dic['teaser_calendar_image_url'])
+        url_list.append(dic['teaser_image_url'])
+        url_list.append(dic['teaser_voice_url'])
     with open('json\\config.json', 'w+', encoding='utf-8') as f:
         f.write(r.text)
 
-    r = amz_request(s, 'auth', context, access, secret, token, amz_payload)
+    r = amz_request(s, 'auth', amz_payload)
     dic = r.json()
-    cf_policy = dic['p']
-    cf_signature = dic['s']
-    cf_key_pair = dic['k']
+    cf_policy, cf_signature, cf_key_pair = dic['p'], dic['s'], dic['k']
 
-    r = amz_request(s, 'movie', context, access, secret, token, amz_payload)
+    r = amz_request(s, 'movie', amz_payload)
     dic = r.json()
     movie_modified = False
     for movie in dic['movies']:
         if int(movie['id']) > int(last_movie_fetched):
-            uri_list.append(movie['movie_url'].split('net')[1])
-            uri_list.append(movie['image_url'])
+            url_list.append(movie['movie_url'].split('net')[1])
+            url_list.append(movie['image_url'])
             movie_modified = True
             last_movie_fetched = str(movie['id'])
     if movie_modified is True:
@@ -257,34 +258,35 @@ def main():
         config.set('fetch', 'last_movie_fetched', last_movie_fetched)
 
     if date_news_updated > date_last_news_updated:
-        r = amz_request(s, 'news', context, access, secret, token, amz_payload)
+        r = amz_request(s, 'news', amz_payload)
         with open('json\\news.json', 'w+', encoding='utf-8') as f:
             f.write(r.text)
-        config.set('fetch', 'last_news_updated', news_updated)
+        config.set('fetch', 'last_news_updated', str_news_updated)
 
     start_date = date_last_modified + timedelta(days=1)
     delta = date_today - start_date
-    days = [(start_date + timedelta(days=i)).strftime("%Y/%m/%d") for i in range(delta.days + 1)]
-    amz_payload['days'] = days
-    r = amz_request(s, 'dailycalendar', context, access, secret, token, amz_payload)
+    amz_payload['days'] = [(start_date + timedelta(days=i)).strftime("%Y/%m/%d") for i in range(delta.days + 1)]
+    r = amz_request(s, 'dailycalendar', amz_payload)
     dic = r.json()
     del amz_payload['days']
     for day in dic['days']:
-        filename = day['month'].zfill(2) + day['date'].zfill(2)
-        uri_list.append(day['image_url'])
-        uri_list.append(day['voice_url'])
+        url_list.append(day['image_url'])
+        url_list.append(day['voice_url'])
+        with open('json\\calendar\\' + day['month'].zfill(2) + day['date'].zfill(2) + '.json', 'w+',
+                  encoding='utf-8') as f:
+            f.write(json.dumps(day, ensure_ascii=False))
+        # Rewards
         if day['rewards'] is not None:
             rewards = json.loads(day['rewards'].strip('[]'))
-            uri_list.append(rewards['thumbnail_url'])
-            uri_list.append(rewards['image_url'])
-        with open('json\\calendar\\' + filename + '.json', 'w+', encoding='utf-8') as f:
-            f.write(json.dumps(day, ensure_ascii=False))
-        if day['date'] == str(calendar.monthrange(int(day['year']), int(day['month']))[1]):
+            url_list.append(rewards['thumbnail_url'])
+            url_list.append(rewards['image_url'])
+        # Monthly gifts
+        if int(day['date']) == calendar.monthrange(int(day['year']), int(day['month']))[1]:
             amz_payload['date'] = day['key'][:7]
-            r = amz_request(s, 'monthlygift', context, access, secret, token, amz_payload)
+            r = amz_request(s, 'monthlygift', amz_payload)
             dic = r.json()
-            uri_list.append(dic['thumbnail_url'])
-            uri_list.append(dic['image_url'])
+            url_list.append(dic['thumbnail_url'])
+            url_list.append(dic['image_url'])
             with open('json\\monthlygift\\' + dic['date'][5:] + '.json', 'w+', encoding='utf-8')as f:
                 f.write(r.text)
 
@@ -299,13 +301,9 @@ def main():
             'CloudFront-Signature': cf_signature,
             'CloudFront-Key-Pair-Id': cf_key_pair
         })
-        for uri in unique(uri_list):
-            cf_get(s, uri)
-    config.set('fetch', 'last_modified', today)
+        for url in unique(url_list):
+            cf_get(s, url)
+    config.set('fetch', 'last_modified', str_today)
     with open('fetch.ini', 'w+') as file:
         config.write(file)
     print('Done.')
-
-
-if __name__ == '__main__':
-    main()
