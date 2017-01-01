@@ -181,7 +181,8 @@ def unique(seq):
 
 if __name__ == '__main__':
     print('Koyomimonogatari Fetch')
-    folders = ['teaser', 'movie', 'calendar', 'monthlygift', 'json\\calendar', 'json\\monthlygift']
+    folders = ['teaser', 'movie', 'calendar', 'monthlygift', 'json\\calendar', 'json\\monthlygift',
+               'json\\monthlygift\\complete']
     for folder in folders:
         if os.path.exists(folder) is False:
             os.makedirs(folder)
@@ -193,7 +194,7 @@ if __name__ == '__main__':
         user_id = get_id()
         config['fetch'] = {'last_modified': '2015/12/31',
                            'last_news_updated': '2015/12/31',
-                           'last_movie_updated': '0',
+                           'last_movie_fetched': '0',
                            'teaser_fetched': False,
                            'user_id': user_id}
         with open('fetch.ini', 'w') as file:
@@ -214,8 +215,8 @@ if __name__ == '__main__':
     s = requests.Session()
     amz_payload = {
         'os': 'android',
-        'version': '1.0.5',
-        'build_no': '19',
+        'version': '1.0.6',
+        'build_no': '20',
         'user_id': user_id,
         'width': 1920,
         'height': 1080,
@@ -285,10 +286,23 @@ if __name__ == '__main__':
             amz_payload['date'] = day['key'][:7]
             r = amz_request(s, 'monthlygift', amz_payload)
             dic = r.json()
+            del amz_payload['date']
             url_list.append(dic['thumbnail_url'])
             url_list.append(dic['image_url'])
             with open('json\\monthlygift\\' + dic['date'][5:] + '.json', 'w+', encoding='utf-8')as f:
                 f.write(r.text)
+
+    days = range(1, 367)
+    for day in days:
+        amz_payload['days'] = day
+        r = amz_request(s, 'completeinfo', amz_payload)
+        dic = r.json()
+        url_list.append(dic['image_url'])
+        if dic['gift'] is True:
+            url_list.append(dic['gift_thumbnail_url'])
+            url_list.append(dic['gift_image_url'])
+        with open('json\\monthlygift\\complete\\' + str(dic['days']) + '.json', 'w+', encoding='utf-8')as f:
+            f.write(r.text)
 
     with requests.Session() as s:
         s.headers.update({
